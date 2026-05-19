@@ -1,25 +1,30 @@
-  pipeline {
+pipeline {
       agent any
       stages {
           stage('Start') {
               steps {
-                  echo 'Lab_1: nginx/custom'
+                  echo 'Lab_2: started by GitHub'
               }
           }
-          stage('Build nginx/custom') {
+          stage('Image build') {
               steps {
-                  sh 'docker build -t nginx/custom:latest .'
+                  sh "docker build -t prkim:latest ."
+                  sh "docker tag prkim orest1234/prkim:latest"
+                  sh "docker tag prkim orest1234/prkim:$BUILD_NUMBER"
               }
           }
-          stage('Test nginx/custom') {
+          stage('Push to registry') {
               steps {
-                  echo 'Test passed'
+                  withDockerRegistry([ credentialsId: "dockerhub_token", url: "" ]) {
+                      sh "docker push orest1234/prkim:latest"
+                      sh "docker push orest1234/prkim:$BUILD_NUMBER"
+                  }
               }
           }
-          stage('Deploy nginx/custom') {
+          stage('Deploy image') {
               steps {
-                  sh 'docker rm -f lab1-nginx || true'
-                  sh 'docker run -d --name lab1-nginx -p 80:80 nginx/custom:latest'
+                  sh "docker rm -f lab1-nginx || true"
+                  sh "docker run -d --name lab1-nginx -p 80:80 orest1234/prkim"
               }
           }
       }
