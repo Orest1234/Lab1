@@ -39,7 +39,7 @@ pipeline {
                   sh "docker run --rm -d --name test-${BUILD_NUMBER} -p 8888:80 ${IMAGE_NAME}:${IMAGE_TAG}"
                   sh "sleep 3 && curl -f http://localhost:8888"
                   sh "docker stop test-${BUILD_NUMBER}"
-                  echo 'Test passed'
+                  echo 'Test1 passed'
               }
           }
           stage('Push') {
