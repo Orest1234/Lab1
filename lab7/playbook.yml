@@ -1,0 +1,27 @@
+- name: Deploy Containerized App
+  hosts: all
+  gather_facts: false
+  tasks:
+    - name: Check Docker is available
+      command: docker --version
+      register: docker_check
+      changed_when: false
+
+    - name: Display Docker version
+      debug:
+        msg: "{{ docker_check.stdout }}"
+
+    - name: Pull application image
+      shell: docker pull orest1234/prkim:latest
+
+    - name: Run Application Container
+      shell: |
+        docker rm -f lab7-app || true
+        docker run -d --name lab7-app --restart unless-stopped -p 8096:80 orest1234/prkim:latest
+
+    - name: Verify application is running
+      shell: curl -f http://localhost:8096
+      retries: 3
+      delay: 5
+      register: result
+      until: result.rc == 0

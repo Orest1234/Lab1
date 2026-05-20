@@ -1,0 +1,80 @@
+pipeline {
+    agent any
+
+    environment {
+        TF_IN_AUTOMATION    = 'true'
+        ANSIBLE_HOST_KEY_CHECKING = 'False'
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                checkout scm
+            }
+        }
+
+        stage('Terraform Init') {
+            steps {
+                dir('lab7') {
+                    sh 'terraform init -input=false'
+                }
+            }
+        }
+
+        stage('Terraform Plan') {
+            steps {
+                dir('lab7') {
+                    sh 'terraform plan -out=tfplan -input=false'
+                }
+            }
+        }
+
+        stage('Terraform Apply') {
+            steps {
+                dir('lab7') {
+                    sh 'terraform apply -auto-approve -input=false tfplan'
+                    sh 'terraform output -raw server_ip > server_ip.txt'
+                    sh 'terraform output -raw server_port > server_port.txt'
+                }
+            }
+        }
+
+        stage('Ansible Deploy') {
+            steps {
+                dir('lab7') {
+                    script {
+                        def serverIp = readFile('server_ip.txt').trim()
+                        sh """
+                            ansible-playbook playbook.yml \
+                                -i "${serverIp}," \
+                                -e "ansible_connection=local"
+                        """
+                    }
+                }
+            }
+        }
+
+        stage('Verify') {
+            steps {
+                dir('lab7') {
+                    script {
+                        def serverPort = readFile('server_port.txt').trim()
+                        sh "curl -f http://localhost:${serverPort}"
+                        sh "curl -f http://localhost:8096"
+                    }
+                }
+            }
+        }
+    }
+
+    post {
+        failure {
+            dir('lab7') {
+                sh 'terraform destroy -auto-approve || true'
+            }
+        }
+        success {
+            echo 'Pipeline completed successfully!'
+        }
+    }
+}
