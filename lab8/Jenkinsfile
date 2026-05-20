@@ -1,9 +1,15 @@
 pipeline {
     agent any
 
+    triggers {
+        githubPush()
+    }
+
     environment {
         TF_IN_AUTOMATION         = 'true'
         ANSIBLE_HOST_KEY_CHECKING = 'False'
+        TELEGRAM_BOT_TOKEN       = '8292543642:AAFHHC9lXxmMgBRMnphvtPINh_xLiOMvH88'
+        TELEGRAM_CHAT_ID         = '461571391'
     }
 
     stages {
@@ -72,9 +78,18 @@ pipeline {
             dir('lab8/terraform') {
                 sh 'terraform destroy -auto-approve || true'
             }
+            sh """
+                curl -s -X POST https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage \
+                    -d chat_id=${TELEGRAM_CHAT_ID} \
+                    -d text="❌ Lab8 Pipeline FAILED - Build #${BUILD_NUMBER}"
+            """
         }
         success {
-            echo 'Full CI/CD pipeline completed successfully!'
+            sh """
+                curl -s -X POST https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage \
+                    -d chat_id=${TELEGRAM_CHAT_ID} \
+                    -d text="✅ Lab8 Pipeline SUCCESS - Build #${BUILD_NUMBER}"
+            """
         }
     }
 }
