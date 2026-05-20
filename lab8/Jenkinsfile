@@ -1,0 +1,80 @@
+pipeline {
+    agent any
+
+    environment {
+        TF_IN_AUTOMATION         = 'true'
+        ANSIBLE_HOST_KEY_CHECKING = 'False'
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                checkout scm
+            }
+        }
+
+        stage('Terraform Apply') {
+            steps {
+                dir('lab8/terraform') {
+                    sh 'terraform init -input=false'
+                    sh 'terraform plan -out=tfplan -input=false'
+                    sh 'terraform apply -auto-approve -input=false tfplan'
+                }
+            }
+        }
+
+        stage('Dynamic Inventory') {
+            steps {
+                dir('lab8/terraform') {
+                    script {
+                        env.NODE_EXPORTER_TARGET = sh(
+                            script: 'terraform output -raw node_exporter_target',
+                            returnStdout: true
+                        ).trim()
+                        env.APP_URL = sh(
+                            script: 'terraform output -raw app_url',
+                            returnStdout: true
+                        ).trim()
+                    }
+                    sh 'terraform output -raw ansible_inventory > ../ansible/inventory.ini'
+                }
+            }
+        }
+
+        stage('Ansible Deploy') {
+            steps {
+                dir('lab8/ansible') {
+                    sh """
+                        ansible-playbook playbook.yml \
+                            -i inventory.ini \
+                            -e "node_exporter_target=${env.NODE_EXPORTER_TARGET}" \
+                            -e "ansible_connection=local"
+                    """
+                }
+            }
+        }
+
+        stage('Smoke Test') {
+            steps {
+                sh 'sleep 5'
+                script {
+                    sh "curl -f ${env.APP_URL}"
+                    sh 'curl -f http://localhost:9092/-/ready'
+                    sh 'curl -f http://localhost:3001/api/health'
+                    sh 'curl -sf http://localhost:9101/metrics | head -5'
+                }
+            }
+        }
+    }
+
+    post {
+        failure {
+            dir('lab8/terraform') {
+                sh 'terraform destroy -auto-approve || true'
+            }
+        }
+        success {
+            echo 'Full CI/CD pipeline completed successfully!'
+        }
+    }
+}

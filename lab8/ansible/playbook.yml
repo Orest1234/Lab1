@@ -1,0 +1,49 @@
+- name: Deploy Monitoring Stack (Monitor Node)
+  hosts: all
+  gather_facts: false
+  tasks:
+    - name: Render Prometheus configuration from template
+      template:
+        src: templates/prometheus.yml.j2
+        dest: /tmp/lab8-prometheus.yml
+
+    - name: Deploy Prometheus container
+      shell: |
+        docker rm -f lab8-prometheus || true
+        docker run -d --name lab8-prometheus \
+          --network lab8-network \
+          --restart unless-stopped \
+          -p 9092:9090 \
+          -v /tmp/lab8-prometheus.yml:/etc/prometheus/prometheus.yml:ro \
+          prom/prometheus:latest
+
+    - name: Deploy Grafana container
+      shell: |
+        docker rm -f lab8-grafana || true
+        docker run -d --name lab8-grafana \
+          --network lab8-network \
+          --restart unless-stopped \
+          -p 3001:3000 \
+          -e GF_SECURITY_ADMIN_USER=admin \
+          -e GF_SECURITY_ADMIN_PASSWORD=admin123 \
+          grafana/grafana:10.4.0
+
+    - name: Wait for Prometheus to be ready
+      shell: curl -sf http://localhost:9092/-/ready
+      retries: 5
+      delay: 3
+      register: result
+      until: result.rc == 0
+
+    - name: Wait for Grafana to be ready
+      shell: curl -sf http://localhost:3001/api/health
+      retries: 5
+      delay: 3
+      register: result
+      until: result.rc == 0
+
+    - name: Add Prometheus datasource to Grafana
+      shell: |
+        curl -sf -X POST http://admin:admin123@localhost:3001/api/datasources \
+          -H "Content-Type: application/json" \
+          -d '{"name":"Prometheus","type":"prometheus","url":"http://lab8-prometheus:9090","access":"proxy","isDefault":true}' || true
